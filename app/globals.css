@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+@keyframes coinShimmer {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 14px;
+  }
+}
+
+@keyframes shine {
+  from {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  to {
+    transform: translateY(-10%);
+    opacity: 0.6;
+  }
+}
+
+@keyframes coinRise {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 20px;
+  }
+}
+
