@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function ConfirmationPage() {
   const searchParams = useSearchParams()
@@ -18,10 +19,7 @@ export default function ConfirmationPage() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="max-w-md w-full border-2 border-black rounded-lg p-8 text-center">
-        {/* Header */}
-        <h1 className="text-3xl font-bold text-red-600 mb-8" style={{ fontFamily: 'cursive' }}>
-          OneRupeeGame
-        </h1>
+        
 
         {/* Confirmation Message */}
         <div className="mb-8">
@@ -39,11 +37,21 @@ export default function ConfirmationPage() {
         </Link>
 
         {/* Ad Section */}
-        <div className="mt-8 border-2 border-red-500 rounded-lg p-6">
-          <p className="text-red-500 text-xl font-bold" style={{ fontFamily: 'cursive' }}>
-            Ad
-          </p>
+      <Link
+        href="https://blog.hubspot.com/website/landscaper-websites" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="block"
+      >
+        <div className="relative max-w-7xl mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-34 mt-2">
+          <Image
+            src="/gamead.webp" 
+            alt="Advertisement"
+            fill
+            className="object-fill"
+          />
         </div>
+      </Link>
       </div>
     </div>
   )
