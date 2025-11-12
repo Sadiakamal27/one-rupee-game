@@ -12,29 +12,41 @@ export default function GamePlans() {
   const [recentOrders, setRecentOrders] = useState<Record<number, Order[]>>({});
   const [milestones, setMilestones] = useState<Record<number, Milestone[]>>({});
   // Testing-only minute-based progress growth (visual only)
-  const [minutesElapsed, setMinutesElapsed] = useState<number>(0);
-  const [progressByPlan, setProgressByPlan] = useState<Record<number, number>>(
-    {}
-  );
-  const supabase = createClient();
-
-  useEffect(() => {
-    // Load persisted testing progress
+  const [minutesElapsed, setMinutesElapsed] = useState<number>(() => {
     try {
-      if (typeof window !== "undefined") {
-        const saved = window.localStorage.getItem("minutesElapsed");
+      if (typeof window !== 'undefined') {
+        const saved = window.localStorage.getItem('minutesElapsed')
         if (saved) {
-          const parsed = parseInt(saved, 10);
-          if (!Number.isNaN(parsed)) setMinutesElapsed(parsed);
-        }
-        const savedMap = window.localStorage.getItem("progressByPlan");
-        if (savedMap) {
-          const parsedMap = JSON.parse(savedMap) as Record<number, number>;
-          setProgressByPlan(parsedMap || {});
+          const parsed = parseInt(saved, 10)
+          if (!Number.isNaN(parsed)) return parsed
         }
       }
     } catch {}
+    return 0
+  })
 
+  const [progressByPlan, setProgressByPlan] = useState<Record<number, number>>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const savedMap = window.localStorage.getItem('progressByPlan')
+        if (savedMap) {
+          const parsedMap = JSON.parse(savedMap) as Record<string, number>
+          const parsedMapNum: Record<number, number> = {}
+          Object.keys(parsedMap || {}).forEach((k) => {
+            const n = parseInt(k, 10)
+            if (!Number.isNaN(n)) parsedMapNum[n] = parsedMap[k]
+          })
+          return parsedMapNum
+        }
+      }
+    } catch {}
+    return {}
+  })
+  const [hydrated, setHydrated] = useState(false)
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Initial data fetch (progress is hydrated from localStorage via state initializers)
     fetchPlans();
     fetchMilestones();
     fetchRecentOrders();
@@ -68,6 +80,12 @@ export default function GamePlans() {
     };
   }, []);
 
+  // mark hydration complete so other effects that depend on restored state don't
+  // overwrite the restored progress on first render
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
   // Persist testing progress
   useEffect(() => {
     try {
@@ -91,6 +109,8 @@ export default function GamePlans() {
 
   // On each minute tick, bump each plan's stored progress by 1% (capped at 100)
   useEffect(() => {
+    // Wait until hydration completes so we don't overwrite restored values
+    if (!hydrated) return
     if (!plans.length) return;
     setProgressByPlan((prev) => {
       const next: Record<number, number> = { ...prev };
@@ -100,7 +120,7 @@ export default function GamePlans() {
       }
       return next;
     });
-  }, [minutesElapsed, plans.length]);
+  }, [minutesElapsed, plans.length, hydrated]);
 
   // no header clock (per latest UI request)
 
@@ -116,6 +136,22 @@ export default function GamePlans() {
       console.error("Error fetching plans:", error);
     } else {
       setPlans(data || []);
+
+      // Merge DB-reported progress with persisted progress so refresh
+      // does not reset visual progress saved in localStorage.
+      try {
+        setProgressByPlan((prev) => {
+          const next = { ...prev } as Record<number, number>;
+          (data || []).forEach((p: GamePlan) => {
+            const pct = Math.round(getProgressPercentage(p.current_amount, p.goal_amount));
+            const existing = typeof prev[p.id] === 'number' ? prev[p.id] : 0;
+            next[p.id] = Math.max(existing, pct);
+          });
+          return next;
+        });
+      } catch (err) {
+        // ignore
+      }
     }
   };
 
@@ -285,9 +321,9 @@ export default function GamePlans() {
                   </div>
                   <div className="relative h-56 sm:h-64">
                     {/* Tube container with clipped fill */}
-                    <div className="absolute inset-0 mx-auto w-12 sm:w-14 bg-gray-100 border-2 border-gray-300 rounded-full overflow-hidden shadow-inner">
+                     <div className="absolute inset-0 mx-auto w-12 sm:w-14 bg-gray-100 border-2 border-gray-300 rounded-full overflow-hidden shadow-inner">
                      <div
-  className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-full"
+  className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-full rounded-t-none"
   style={{
     height: `${progress}%`,
     transition: 'height 600ms ease-in-out',
@@ -311,7 +347,7 @@ export default function GamePlans() {
 >
   {/* subtle rim highlight for curved coins */}
   <div
-    className="absolute inset-x-0 bottom-0 h-full rounded-full pointer-events-none"
+    className="absolute inset-x-0 bottom-0 h-full rounded-b-full rounded-t-none pointer-events-none"
     style={{
       background:
         'radial-gradient(circle at 50% 10%, rgba(255,255,255,0.35), transparent 70%)',
@@ -333,7 +369,7 @@ export default function GamePlans() {
                           }}
                         >
                           <div className="w-3 border-t-2 border-gray-400"></div>
-                          <div className="ml-2 text-[10px] text-gray-800 font-semibold truncate max-w-[6.5rem]">
+                          <div className="ml-2 text-[10px] text-gray-800 font-semibold truncate max-w-26">
                             {uniformLabels[i]}
                           </div>
                         </div>
