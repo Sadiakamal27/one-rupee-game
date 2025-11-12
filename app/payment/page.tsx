@@ -142,9 +142,14 @@ export default function PaymentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="max-w-md w-full border-2 border-black rounded-lg p-6">
-      
+    <div className="min-h-screen bg-white flex items-center  justify-center p-4">
+      <div className="max-w-md w-full border-2 border-black rounded-lg p-6 ">
+     <h1
+          className="text-2xl sm:text-3xl text-center mb-4 font-bold text-red-600"
+          style={{ fontFamily: 'cursive' }}
+        >
+          Checkout
+        </h1>
 
         {/* Payment Form */}
         <form onSubmit={handlePayment} className="space-y-4">
