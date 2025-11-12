@@ -1,69 +1,67 @@
-'use client'
+"use client"
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
-type ToastVariant = 'default' | 'success' | 'error'
-
-type ToastMessage = {
-  id: number
-  title: string
+type Toast = {
+  id: string
+  title?: string
   description?: string
-  variant: ToastVariant
+  variant?: 'success' | 'error' | 'info'
 }
 
 type ToastContextValue = {
-  showToast: (toast: Omit<ToastMessage, 'id'>) => void
+  toast: (t: Omit<Toast, 'id'>) => string
 }
 
-const ToastContext = createContext<ToastContextValue | undefined>(undefined)
+const ToastContext = createContext<ToastContextValue | null>(null)
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<ToastMessage[]>([])
+export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
+  const [toasts, setToasts] = useState<Toast[]>([])
 
-  const showToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
-    const id = Date.now()
-    setToasts((current) => [...current, { ...toast, id }])
+  const toast = useCallback((t: Omit<Toast, 'id'>) => {
+    const id = Math.random().toString(36).slice(2, 9)
+    const next: Toast = { id, ...t }
+    setToasts((s) => [...s, next])
+    // auto-dismiss
     setTimeout(() => {
-      setToasts((current) => current.filter((t) => t.id !== id))
+      setToasts((s) => s.filter((x) => x.id !== id))
     }, 4000)
+    return id
   }, [])
 
-  const value = useMemo(() => ({ showToast }), [showToast])
+  const value = useMemo(() => ({ toast }), [toast])
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {createPortal(
-        <div className="fixed inset-x-0 top-4 z-50 flex flex-col items-center gap-2 px-4">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className={`w-full max-w-sm rounded-md border px-4 py-3 shadow-lg transition ${
-                toast.variant === 'success'
-                  ? 'border-green-500 bg-green-50 text-green-800'
-                  : toast.variant === 'error'
-                  ? 'border-red-500 bg-red-50 text-red-800'
-                  : 'border-gray-300 bg-white text-gray-800'
-              }`}
-            >
-              <p className="text-sm font-semibold">{toast.title}</p>
-              {toast.description && <p className="mt-1 text-xs text-inherit/80">{toast.description}</p>}
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+
+      {/* toast container */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            role="status"
+            className={`max-w-sm w-full px-4 py-2 rounded shadow-lg border ${
+              t.variant === 'success'
+                ? 'bg-green-50 border-green-200 text-green-900'
+                : t.variant === 'error'
+                ? 'bg-red-50 border-red-200 text-red-900'
+                : 'bg-white border-gray-200 text-gray-900'
+            }`}
+          >
+            <div className="font-semibold text-sm">{t.title}</div>
+            {t.description && <div className="text-xs mt-1">{t.description}</div>}
+          </div>
+        ))}
+      </div>
     </ToastContext.Provider>
   )
 }
 
-export function useToast() {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context.showToast
+export const useToast = () => {
+  const ctx = useContext(ToastContext)
+  if (!ctx) throw new Error('useToast must be used within ToastProvider')
+  return (opts: Omit<Toast, 'id'>) => ctx.toast(opts)
 }
 
-
+export default ToastProvider
