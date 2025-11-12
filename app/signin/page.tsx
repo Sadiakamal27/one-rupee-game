@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
-import { useToast } from '@/components/ToastProvider'
 
 export default function SigninPage() {
   const router = useRouter()
@@ -16,7 +15,6 @@ export default function SigninPage() {
   const [error, setError] = useState<string | null>(null)
   const [needsConfirm, setNeedsConfirm] = useState(false)
   const [info, setInfo] = useState<string | null>(null)
-  const toast = useToast()
 
   const resendConfirmation = async () => {
     setLoading(true)
@@ -30,18 +28,8 @@ export default function SigninPage() {
       })
       if (error) throw error
       setInfo('Confirmation email sent. Please check your inbox.')
-      toast({
-        title: 'Confirmation email sent',
-        description: 'Check your inbox and follow the link to activate your account.',
-        variant: 'success',
-      })
     } catch (err: any) {
       setError(err.message || 'Failed to resend confirmation email')
-      toast({
-        title: 'Failed to resend email',
-        description: err.message || 'Please try again later.',
-        variant: 'error',
-      })
     } finally {
       setLoading(false)
     }
@@ -61,29 +49,14 @@ export default function SigninPage() {
         if (msg.includes('confirm') || msg.includes('not confirmed') || msg.includes('verify')) {
           setNeedsConfirm(true)
           setError('Your email is not confirmed. Please confirm your email to continue.')
-          toast({
-            title: 'Email not confirmed',
-            description: 'Please confirm your email address. We can resend the confirmation link.',
-            variant: 'error',
-          })
         } else {
           throw error
         }
         return
       }
       router.push('/')
-      toast({
-        title: 'Welcome back!',
-        description: 'You are now signed in.',
-        variant: 'success',
-      })
     } catch (err: any) {
       setError(err.message || 'Sign in failed')
-      toast({
-        title: 'Sign in failed',
-        description: err.message || 'Please try again.',
-        variant: 'error',
-      })
     } finally {
       setLoading(false)
     }
