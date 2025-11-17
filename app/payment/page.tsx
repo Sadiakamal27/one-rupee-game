@@ -116,6 +116,29 @@ export default function PaymentPage() {
           .update({ payment_status: 'completed' })
           .eq('id', orderData.id)
 
+        // Add chosen plan to localStorage array
+        if (planId) {
+          try {
+            const saved = window.localStorage.getItem('chosenPlanIds')
+            let chosenPlanIds: number[] = []
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved) as number[]
+                if (Array.isArray(parsed)) {
+                  chosenPlanIds = parsed.filter(id => typeof id === 'number' && !Number.isNaN(id))
+                }
+              } catch {}
+            }
+            const planIdNum = parseInt(planId, 10)
+            if (!Number.isNaN(planIdNum) && !chosenPlanIds.includes(planIdNum)) {
+              chosenPlanIds.push(planIdNum)
+              window.localStorage.setItem('chosenPlanIds', JSON.stringify(chosenPlanIds))
+            }
+          } catch (err) {
+            console.error('Failed to save chosen plan:', err)
+          }
+        }
+
         // Redirect to confirmation page with order_id
         router.push(`/confirmation?orderId=${orderData.order_id}`)
       } else {
