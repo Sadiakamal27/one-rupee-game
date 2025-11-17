@@ -42,6 +42,36 @@ export default function GamePlans() {
     } catch {}
     return {}
   })
+  const [chosenPlanIds, setChosenPlanIds] = useState<number[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        // First check for new format (array)
+        const savedNew = window.localStorage.getItem('chosenPlanIds')
+        if (savedNew) {
+          const parsed = JSON.parse(savedNew) as number[]
+          if (Array.isArray(parsed)) {
+            const validIds = parsed.filter(id => typeof id === 'number' && !Number.isNaN(id))
+            if (validIds.length > 0) {
+              return validIds
+            }
+          }
+        }
+        // Migrate from old format (single ID) if it exists
+        const savedOld = window.localStorage.getItem('chosenPlanId')
+        if (savedOld) {
+          const parsed = parseInt(savedOld, 10)
+          if (!Number.isNaN(parsed)) {
+            // Migrate to new format
+            const migrated = [parsed]
+            window.localStorage.setItem('chosenPlanIds', JSON.stringify(migrated))
+            window.localStorage.removeItem('chosenPlanId')
+            return migrated
+          }
+        }
+      }
+    } catch {}
+    return []
+  })
   const [hydrated, setHydrated] = useState(false)
   const supabase = createClient();
 
@@ -107,20 +137,79 @@ export default function GamePlans() {
     } catch {}
   }, [progressByPlan]);
 
-  // On each minute tick, bump each plan's stored progress by 1% (capped at 100)
+  // Persist chosen plan IDs when they change
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        if (chosenPlanIds.length > 0) {
+          window.localStorage.setItem("chosenPlanIds", JSON.stringify(chosenPlanIds));
+        } else {
+          window.localStorage.removeItem("chosenPlanIds");
+        }
+      }
+    } catch {}
+  }, [chosenPlanIds]);
+
+  // Check for completed orders and add those plan IDs to chosen plans
+  useEffect(() => {
+    if (!hydrated || !plans.length) return;
+    
+    const checkCompletedOrders = async () => {
+      try {
+        const { data: orders } = await supabase
+          .from("orders")
+          .select("plan_id")
+          .eq("payment_status", "completed")
+          .order("created_at", { ascending: false });
+
+        if (orders && orders.length > 0) {
+          const orderPlanIds = [...new Set(orders.map(o => o.plan_id))] as number[];
+          setChosenPlanIds((prev) => {
+            const combined = [...new Set([...prev, ...orderPlanIds])];
+            return combined;
+          });
+        }
+      } catch (err) {
+        console.error("Error checking completed orders:", err);
+      }
+    };
+
+    checkCompletedOrders();
+  }, [hydrated, plans.length, supabase]);
+
+  // Initialize progress for chosen plans if they don't have any yet
+  useEffect(() => {
+    if (!hydrated || chosenPlanIds.length === 0) return;
+    
+    setProgressByPlan((prev) => {
+      const next = { ...prev };
+      let updated = false;
+      chosenPlanIds.forEach((planId) => {
+        if (typeof prev[planId] !== "number") {
+          next[planId] = 0;
+          updated = true;
+        }
+      });
+      return updated ? next : prev;
+    });
+  }, [hydrated, chosenPlanIds]);
+
+  // On each minute tick, bump all chosen plans' stored progress by 1% (capped at 100)
   useEffect(() => {
     // Wait until hydration completes so we don't overwrite restored values
     if (!hydrated) return
     if (!plans.length) return;
+    if (chosenPlanIds.length === 0) return;
+    
     setProgressByPlan((prev) => {
       const next: Record<number, number> = { ...prev };
-      for (const p of plans) {
-        const current = typeof prev[p.id] === "number" ? prev[p.id] : 0;
-        next[p.id] = Math.min(current + 1, 100);
-      }
+      chosenPlanIds.forEach((planId) => {
+        const current = typeof prev[planId] === "number" ? prev[planId] : 0;
+        next[planId] = Math.min(current + 1, 100);
+      });
       return next;
     });
-  }, [minutesElapsed, plans.length, hydrated]);
+  }, [minutesElapsed, plans.length, hydrated, chosenPlanIds]);
 
   // no header clock (per latest UI request)
 
@@ -264,10 +353,14 @@ export default function GamePlans() {
           const uniformLabels = ["cash", "small camera", "phone", "17 Pro Max"];
           const uniformPercents = [25, 50, 75, 100].map((p) => Math.min(87, p)); // keep top safely inside
           const planOrders = recentOrders[plan.id] || [];
-          // Testing visual progress: grow 1% per minute, capped at real data progress if higher
+          // Testing visual progress: only show progress for chosen plans
+          const isChosenPlan = chosenPlanIds.includes(plan.id);
           const storedPct = progressByPlan[plan.id] ?? 0;
-          const testingPct = Math.min(100, minutesElapsed); // 1% per minute (global)
-          const progress = Math.max(progressDataPct, storedPct, testingPct);
+          // For chosen plans: use max of data progress and stored progress (which increments over time)
+          // For other plans: only use data progress
+          const progress = isChosenPlan 
+            ? Math.max(progressDataPct, storedPct)
+            : progressDataPct;
           const rupeesProgress = Math.round(
             (progress / 100) * plan.goal_amount
           );
@@ -394,6 +487,14 @@ export default function GamePlans() {
               {/* Enter Button */}
               <Link
                 href={`/payment?plan=${plan.id}&amount=${plan.price}`}
+                onClick={() => {
+                  setChosenPlanIds((prev) => {
+                    if (prev.includes(plan.id)) {
+                      return prev; // Already chosen, don't add again
+                    }
+                    return [...prev, plan.id];
+                  });
+                }}
                 className="mt-4 block w-full bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
               >
                 Enter for {plan.price}Rs
