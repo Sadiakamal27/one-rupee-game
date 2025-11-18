@@ -11,37 +11,6 @@ export default function GamePlans() {
   const [plans, setPlans] = useState<GamePlan[]>([]);
   const [recentOrders, setRecentOrders] = useState<Record<number, Order[]>>({});
   const [milestones, setMilestones] = useState<Record<number, Milestone[]>>({});
-  // Testing-only minute-based progress growth (visual only)
-  const [minutesElapsed, setMinutesElapsed] = useState<number>(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const saved = window.localStorage.getItem('minutesElapsed')
-        if (saved) {
-          const parsed = parseInt(saved, 10)
-          if (!Number.isNaN(parsed)) return parsed
-        }
-      }
-    } catch {}
-    return 0
-  })
-
-  const [progressByPlan, setProgressByPlan] = useState<Record<number, number>>(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const savedMap = window.localStorage.getItem('progressByPlan')
-        if (savedMap) {
-          const parsedMap = JSON.parse(savedMap) as Record<string, number>
-          const parsedMapNum: Record<number, number> = {}
-          Object.keys(parsedMap || {}).forEach((k) => {
-            const n = parseInt(k, 10)
-            if (!Number.isNaN(n)) parsedMapNum[n] = parsedMap[k]
-          })
-          return parsedMapNum
-        }
-      }
-    } catch {}
-    return {}
-  })
   const [chosenPlanIds, setChosenPlanIds] = useState<number[]>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -99,14 +68,8 @@ export default function GamePlans() {
       )
       .subscribe();
 
-    // Testing: increment a counter once per minute to drive visual progress
-    const intervalId = setInterval(() => {
-      setMinutesElapsed((m) => Math.min(m + 1, 1000));
-    }, 60_000);
-
     return () => {
       supabase.removeChannel(ordersChannel);
-      clearInterval(intervalId);
     };
   }, []);
 
@@ -115,27 +78,6 @@ export default function GamePlans() {
   useEffect(() => {
     setHydrated(true)
   }, [])
-
-  // Persist testing progress
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("minutesElapsed", String(minutesElapsed));
-      }
-    } catch {}
-  }, [minutesElapsed]);
-
-  // Persist per-plan progress map when it changes
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          "progressByPlan",
-          JSON.stringify(progressByPlan)
-        );
-      }
-    } catch {}
-  }, [progressByPlan]);
 
   // Persist chosen plan IDs when they change
   useEffect(() => {
@@ -177,39 +119,6 @@ export default function GamePlans() {
     checkCompletedOrders();
   }, [hydrated, plans.length, supabase]);
 
-  // Initialize progress for chosen plans if they don't have any yet
-  useEffect(() => {
-    if (!hydrated || chosenPlanIds.length === 0) return;
-    
-    setProgressByPlan((prev) => {
-      const next = { ...prev };
-      let updated = false;
-      chosenPlanIds.forEach((planId) => {
-        if (typeof prev[planId] !== "number") {
-          next[planId] = 0;
-          updated = true;
-        }
-      });
-      return updated ? next : prev;
-    });
-  }, [hydrated, chosenPlanIds]);
-
-  // On each minute tick, bump all chosen plans' stored progress by 1% (capped at 100)
-  useEffect(() => {
-    // Wait until hydration completes so we don't overwrite restored values
-    if (!hydrated) return
-    if (!plans.length) return;
-    if (chosenPlanIds.length === 0) return;
-    
-    setProgressByPlan((prev) => {
-      const next: Record<number, number> = { ...prev };
-      chosenPlanIds.forEach((planId) => {
-        const current = typeof prev[planId] === "number" ? prev[planId] : 0;
-        next[planId] = Math.min(current + 1, 100);
-      });
-      return next;
-    });
-  }, [minutesElapsed, plans.length, hydrated, chosenPlanIds]);
 
   // no header clock (per latest UI request)
 
@@ -225,22 +134,6 @@ export default function GamePlans() {
       console.error("Error fetching plans:", error);
     } else {
       setPlans(data || []);
-
-      // Merge DB-reported progress with persisted progress so refresh
-      // does not reset visual progress saved in localStorage.
-      try {
-        setProgressByPlan((prev) => {
-          const next = { ...prev } as Record<number, number>;
-          (data || []).forEach((p: GamePlan) => {
-            const pct = Math.round(getProgressPercentage(p.current_amount, p.goal_amount));
-            const existing = typeof prev[p.id] === 'number' ? prev[p.id] : 0;
-            next[p.id] = Math.max(existing, pct);
-          });
-          return next;
-        });
-      } catch (err) {
-        // ignore
-      }
     }
   };
 
@@ -296,6 +189,8 @@ export default function GamePlans() {
   };
 
   const getProgressPercentage = (current: number, goal: number) => {
+    if (!goal || goal === 0) return 0;
+    if (!current || current === 0) return 0;
     return Math.min((current / goal) * 100, 100);
   };
 
@@ -318,9 +213,12 @@ export default function GamePlans() {
       {/* Game Plans Grid */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 px-1 sm:px-0">
         {plans.map((plan) => {
+          // Debug: Log progress data
+          console.log(`Plan ${plan.id}: current_amount=${plan.current_amount}, goal_amount=${plan.goal_amount}`);
+          
           const progressDataPct = getProgressPercentage(
-            plan.current_amount,
-            plan.goal_amount
+            plan.current_amount || 0,
+            plan.goal_amount || 1
           );
           const planMilestones = milestones[plan.id] || [];
           // If no milestones present for a plan, provide defaults requested by user
@@ -353,17 +251,12 @@ export default function GamePlans() {
           const uniformLabels = ["cash", "small camera", "phone", "17 Pro Max"];
           const uniformPercents = [25, 50, 75, 100].map((p) => Math.min(87, p)); // keep top safely inside
           const planOrders = recentOrders[plan.id] || [];
-          // Testing visual progress: only show progress for chosen plans
-          const isChosenPlan = chosenPlanIds.includes(plan.id);
-          const storedPct = progressByPlan[plan.id] ?? 0;
-          // For chosen plans: use max of data progress and stored progress (which increments over time)
-          // For other plans: only use data progress
-          const progress = isChosenPlan 
-            ? Math.max(progressDataPct, storedPct)
-            : progressDataPct;
-          const rupeesProgress = Math.round(
-            (progress / 100) * plan.goal_amount
-          );
+          // Use only real progress from database (current_amount / goal_amount)
+          const progress = progressDataPct;
+          const rupeesProgress = plan.current_amount || 0;
+          
+          // Debug: Log calculated progress
+          console.log(`Plan ${plan.id}: progress=${progress}%, rupeesProgress=${rupeesProgress}`);
           // End date handling (ensure 15 days window visual; if no end_date, derive one)
           const endDate = plan.end_date
             ? new Date(plan.end_date)
@@ -418,7 +311,8 @@ export default function GamePlans() {
                      <div
   className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-full rounded-t-none"
   style={{
-    height: `${progress}%`,
+    height: `${Math.max(progress, 0)}%`,
+    minHeight: progress > 0 ? '2px' : '0px', // Ensure even tiny progress is visible
     transition: 'height 600ms ease-in-out',
     backgroundImage: `
       repeating-linear-gradient(
@@ -511,16 +405,12 @@ export default function GamePlans() {
         rel="noopener noreferrer" // security best practice
         className="block"
       >
-        <div className="relative max-w-7xl mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-64">
-          {/* Image fills entire container */}
-          <Image
-            src="/gamead.webp" // change to your actual image path
-            alt="Advertisement"
-            fill
-            className="object-fill"
-          />
-        </div>
+        <div className="relative max-w-7xl mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-64 flex items-center justify-center">
+  <p className="text-red-500 text-xl font-bold">Ad</p>
+</div>
+
       </Link>
     </div>
   );
 }
+
