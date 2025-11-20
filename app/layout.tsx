@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -19,15 +20,18 @@ export const metadata: Metadata = {
   description: "Win amazing prizes with One Rupee Game",
 };
 
+// layout.tsx
 export default function RootLayout({
   children,
-}: Readonly<{
+  hideNavbar = false
+}: {
   children: React.ReactNode
-}>) {
+  hideNavbar?: boolean
+}) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Navbar />
+        {!hideNavbar && <Navbar />}
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
