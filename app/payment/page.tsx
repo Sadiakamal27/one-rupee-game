@@ -23,6 +23,7 @@ export default function PaymentPage() {
     if (planId) {
       fetchPlan()
     }
+    fetchUserProfile()
   }, [planId])
 
   const fetchPlan = async () => {
@@ -36,6 +37,31 @@ export default function PaymentPage() {
       console.error('Error fetching plan:', error)
     } else {
       setPlan(data)
+    }
+  }
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        // Try to get profile from profiles table
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, full_name')
+          .eq('id', user.id)
+          .single()
+
+        if (profile) {
+          // Use full_name if available, otherwise construct from first and last name
+          const fullName = profile.full_name || `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          if (fullName) {
+            setName(fullName)
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Could not fetch user profile:', error)
+      // Silently fail - user can still enter name manually
     }
   }
 
@@ -206,7 +232,7 @@ export default function PaymentPage() {
             disabled={loading}
             className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold text-lg transition-colors disabled:opacity-50"
           >
-            {loading ? 'Processing...' : `Pay Rs${amount} (Easypaisa)`}
+            {loading ? 'Processing...' : `Pay Rs ${amount} (Easypaisa)`}
           </button>
         </form>
 
