@@ -9,13 +9,39 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
   const supabase = createClient()
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   useEffect(() => {
-    if (variant !== 'app') return
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setIsLoggedIn(true)
+    if (variant !== 'app') {
+      setIsCheckingAuth(false)
+      return
+    }
+
+    // 1. Initial check
+    const checkAuth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        setIsLoggedIn(!!user)
+      } catch (error) {
+        setIsLoggedIn(false)
+      } finally {
+        setIsCheckingAuth(false)
+      }
+    }
+
+    checkAuth()
+
+    // 2. Live auth listener for login / logout / OAuth redirects
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsLoggedIn(!!session?.user)
+      setIsCheckingAuth(false)
     })
-  }, [variant])
+
+    // 3. Cleanup
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [variant, supabase])
 
   const handleSignOut = async () => {
     try {
@@ -27,51 +53,55 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Navbar container */}
       <div className="flex justify-between items-center py-4">
-        {/* Game name on the left */}
         <Link
-            href="/"
-            className="inline-block  text-white px-6 py-2 rounded-lg font-semibold transition-colors"
-          >
-        <h1
-          className="text-2xl sm:text-3xl font-bold text-red-600"
-          style={{ fontFamily: 'cursive' }}
+          href="/"
+          className="inline-block text-white px-6 py-2 rounded-lg font-semibold transition-colors"
         >
-          OneRupeeGame
-        </h1>
+          <h1
+            className="text-2xl sm:text-3xl font-bold text-red-600"
+            style={{ fontFamily: 'cursive' }}
+          >
+            OneRupeeGame
+          </h1>
         </Link>
 
-        {/* Right-side navigation */}
         <div className="flex items-center space-x-2">
-          <Link
-            href="/results"
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
-          >
-            Results
-          </Link>
-          <Link
-            href="/picker"
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
-          >
-            Picker
-          </Link>
-          {isLoggedIn ? (
+          {/* Only show these when logged in and auth check is complete */}
+          {!isCheckingAuth && isLoggedIn && (
             <>
-              <button
-                onClick={handleSignOut}
+              <Link
+                href="/results"
                 className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
               >
-                Logout
-              </button>
+                Results
+              </Link>
+
+              <Link
+                href="/picker"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+              >
+                Picker
+              </Link>
+
               <Link
                 href="/orders"
                 className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
               >
                 Orders
               </Link>
+
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+              >
+                Logout
+              </button>
             </>
-          ) : (
+          )}
+
+          {/* Show sign in/sign up when not logged in and auth check is complete */}
+          {!isCheckingAuth && !isLoggedIn && (
             <>
               <Link
                 href="/signin"
@@ -79,6 +109,7 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
               >
                 Sign in
               </Link>
+
               <Link
                 href="/signup"
                 className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
@@ -90,7 +121,6 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
         </div>
       </div>
 
-      {/* Bottom border */}
       <div className="border-b-2 border-red-200 mb-6"></div>
     </div>
   )
