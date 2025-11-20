@@ -363,11 +363,11 @@ export default function GamePlans() {
                       ))}
                     </div>
                   </div>
-                  {/* Current Amount Display at Bottom */}
+                  {/* Current Amount Display at Bottom
                   <div className="mt-2 text-center text-xs font-semibold text-gray-700 bg-white/80 px-2 py-1 rounded border border-gray-200">
                     Progress: {formatPKR(rupeesProgress)} of{" "}
                     {formatPKR(plan.goal_amount)}
-                  </div>
+                  </div> */}
                 </div>
               </div>
 
@@ -391,7 +391,7 @@ export default function GamePlans() {
                 }}
                 className="mt-4 block w-full bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
               >
-                Enter for {plan.price}Rs
+                Enter for {plan.price} Rs
               </Link>
             </div>
           );
