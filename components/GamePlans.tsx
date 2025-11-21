@@ -160,7 +160,10 @@ export default function GamePlans() {
   const fetchRecentOrders = async () => {
     const { data, error } = await supabase
       .from("orders")
-      .select("*")
+      .select(`
+        *,
+        profile:profiles!user_id(full_name, first_name, last_name)
+      `)
       .eq("payment_status", "completed")
       .order("created_at", { ascending: false })
       .limit(50);
@@ -287,11 +290,19 @@ export default function GamePlans() {
                     Live Participants:
                   </h3>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {planOrders.slice(0, 10).map((order) => (
-                      <p key={order.id} className="text-green-600 text-sm">
-                        {order.name} just bought
-                      </p>
-                    ))}
+                    {planOrders.slice(0, 10).map((order) => {
+                      // Use profile name if available, otherwise fallback to order name
+                      const displayName = order.profile?.full_name || 
+                        (order.profile?.first_name && order.profile?.last_name 
+                          ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
+                          : order.name);
+                      
+                      return (
+                        <p key={order.id} className="text-green-600 text-sm">
+                          {displayName} just bought
+                        </p>
+                      );
+                    })}
                     {planOrders.length === 0 && (
                       <p className="text-gray-400 text-sm">
                         No participants yet

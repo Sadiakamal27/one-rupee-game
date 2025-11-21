@@ -19,6 +19,12 @@ export interface Order {
   amount: number
   payment_status: 'pending' | 'completed' | 'failed'
   created_at: string
+  user_id?: string
+  profile?: {
+    full_name?: string
+    first_name?: string
+    last_name?: string
+  }
 }
 
 export interface Milestone {

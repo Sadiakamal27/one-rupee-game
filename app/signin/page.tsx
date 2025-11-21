@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import Navbar from '@/components/Navbar'
+import GoogleButton from '@/components/GoogleButton'
+import { Button } from "@/components/ui/button"
 
 export default function SigninPage() {
   const router = useRouter()
@@ -15,6 +16,39 @@ export default function SigninPage() {
   const [error, setError] = useState<string | null>(null)
   const [needsConfirm, setNeedsConfirm] = useState(false)
   const [info, setInfo] = useState<string | null>(null)
+
+  // Check for error in URL params (from OAuth callback)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const errorParam = params.get('error')
+    if (errorParam) {
+      setError(errorParam)
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
+  const signInWithGoogle = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      })
+      if (error) throw error
+      // Note: The redirect will happen automatically, so we don't need to do anything here
+    } catch (err: any) {
+      setError(err.message || 'Google sign in failed')
+      setLoading(false)
+    }
+  }
 
   const resendConfirmation = async () => {
     setLoading(true)
@@ -40,20 +74,14 @@ export default function SigninPage() {
     setLoading(true)
     setError(null)
     setNeedsConfirm(false)
-    setInfo(null)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        // Handle the common "Email not confirmed" case gracefully
-        const msg = (error.message || '').toLowerCase()
-        if (msg.includes('confirm') || msg.includes('not confirmed') || msg.includes('verify')) {
-          setNeedsConfirm(true)
-          setError('Your email is not confirmed. Please confirm your email to continue.')
-        } else {
-          throw error
-        }
-        return
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) throw error
+
       router.push('/')
     } catch (err: any) {
       setError(err.message || 'Sign in failed')
@@ -64,11 +92,11 @@ export default function SigninPage() {
 
   return (
     <div className="min-h-screen bg-white p-4">
-      <Navbar variant="auth" />
       <div className="w-full max-w-sm mx-auto border-2 border-black rounded-lg p-6 bg-white">
         <h2 className="text-center text-2xl font-bold text-gray-900 mb-4">
           Welcome back
         </h2>
+
         <form onSubmit={onSubmit} className="space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>
@@ -80,6 +108,7 @@ export default function SigninPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">Password</label>
             <input
@@ -90,28 +119,41 @@ export default function SigninPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
           {info && <p className="text-sm text-green-600">{info}</p>}
-          <button
+
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-md font-semibold transition disabled:opacity-60"
+            className="w-full bg-green-600 hover:bg-red-600 cursor-pointer"
           >
             {loading ? 'Signing in...' : 'Sign in'}
-          </button>
+          </Button>
         </form>
+
         {needsConfirm && (
           <div className="mt-3">
-            <button
-              type="button"
+            <Button
               onClick={resendConfirmation}
               disabled={loading || !email}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md font-semibold transition disabled:opacity-60"
+              variant="secondary"
+              className="w-full cursor-pointer"
             >
               Resend confirmation email
-            </button>
+            </Button>
           </div>
         )}
+
+        {/* GOOGLE SIGN-IN BUTTON */}
+        <div className="mt-4">
+          <GoogleButton
+            onClick={signInWithGoogle}
+            loading={loading}
+            text="Sign in with Google"
+          />
+        </div>
+
         <p className="text-sm mt-3 text-center">
           New here?{' '}
           <Link href="/signup" className="text-blue-600 underline">
@@ -122,5 +164,3 @@ export default function SigninPage() {
     </div>
   )
 }
-
-

@@ -27,7 +27,11 @@ export default function OrdersPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('orders')
-      .select(`*, plan:game_plans(*)`)
+      .select(`
+        *, 
+        plan:game_plans(*),
+        profile:profiles!user_id(full_name, first_name, last_name)
+      `)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -104,25 +108,33 @@ export default function OrdersPage() {
             {orders.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No orders yet</div>
             ) : (
-              orders.map(order => (
-                <div
-                  key={order.id}
-                  className="grid grid-cols-4 gap-4 p-4 border-b border-gray-300 hover:bg-gray-50"
-                >
-                  <div className="font-mono">{order.order_id || order.id}</div>
-                  <div>{order.name}</div>
-                  <div>Rs{order.amount} - {order.plan?.reward_title || 'N/A'}</div>
+              orders.map(order => {
+                // Use profile name if available, otherwise fallback to order name
+                const displayName = order.profile?.full_name || 
+                  (order.profile?.first_name && order.profile?.last_name 
+                    ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
+                    : order.name);
+                
+                return (
                   <div
-                    className={`font-bold text-2xl`}
-                    style={{
-                      fontFamily: 'var(--font-caveat), cursive',
-                      color: expiredOrders.has(order.id) ? 'red' : 'green',
-                    }}
+                    key={order.id}
+                    className="grid grid-cols-4 gap-4 p-4 border-b border-gray-300 hover:bg-gray-50"
                   >
-                    {timeLeft[order.id] || (order.plan ? new Date(order.plan.end_date).toLocaleDateString('en-GB') : 'N/A')}
+                    <div className="font-mono">{order.order_id || order.id}</div>
+                    <div>{displayName}</div>
+                    <div>Rs{order.amount} - {order.plan?.reward_title || 'N/A'}</div>
+                    <div
+                      className={`font-bold text-2xl`}
+                      style={{
+                        fontFamily: 'var(--font-caveat), cursive',
+                        color: expiredOrders.has(order.id) ? 'red' : 'green',
+                      }}
+                    >
+                      {timeLeft[order.id] || (order.plan ? new Date(order.plan.end_date).toLocaleDateString('en-GB') : 'N/A')}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

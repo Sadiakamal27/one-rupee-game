@@ -12,7 +12,7 @@ export default function PaymentPage() {
   const router = useRouter()
   const planId = searchParams.get('plan')
   const amount = searchParams.get('amount')
-  
+
   const [plan, setPlan] = useState<GamePlan | null>(null)
   const [name, setName] = useState('')
   const [easypaisaAccount, setEasypaisaAccount] = useState('')
@@ -67,7 +67,7 @@ export default function PaymentPage() {
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!name || !easypaisaAccount || !planId) {
       alert('Please fill in all fields')
       return
@@ -76,45 +76,80 @@ export default function PaymentPage() {
     setLoading(true)
 
     try {
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser()
+
+      // If user is logged in, ensure their profile exists
+      if (user?.id) {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .single()
+
+        // Create profile if it doesn't exist
+        if (!existingProfile) {
+          const meta = user.user_metadata || {}
+          const firstName = meta.first_name || ''
+          const lastName = meta.last_name || ''
+          const metaFullName = (firstName + ' ' + lastName).trim()
+
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            email: user.email,
+            first_name: firstName || null,
+            last_name: lastName || null,
+            full_name: metaFullName || name,
+          }, { onConflict: 'id' })
+        }
+      }
+
       // Generate unique order ID
       let orderId: string
       let isUnique = false
       let attempts = 0
-      
+
       while (!isUnique && attempts < 10) {
         orderId = Math.floor(Math.random() * 10000000)
           .toString()
           .padStart(7, '0')
-        
+
         // Check if order_id already exists
         const { data: existing } = await supabase
           .from('orders')
           .select('id')
           .eq('order_id', orderId)
           .single()
-        
+
         if (!existing) {
           isUnique = true
         }
         attempts++
       }
-      
+
       if (!isUnique) {
         // Fallback: use timestamp-based ID
         orderId = Date.now().toString().slice(-7)
       }
 
-      // Create order in database
+      // Create order in database with user_id
+      const orderInsert: any = {
+        order_id: orderId!,
+        name,
+        easypaisa_account: easypaisaAccount,
+        plan_id: parseInt(planId),
+        amount: parseInt(amount || '0'),
+        payment_status: 'pending',
+      }
+
+      // Add user_id only if user is logged in
+      if (user?.id) {
+        orderInsert.user_id = user.id
+      }
+
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          order_id: orderId!,
-          name,
-          easypaisa_account: easypaisaAccount,
-          plan_id: parseInt(planId),
-          amount: parseInt(amount || '0'),
-          payment_status: 'pending',
-        })
+        .insert(orderInsert)
         .select()
         .single()
 
@@ -153,7 +188,7 @@ export default function PaymentPage() {
                 if (Array.isArray(parsed)) {
                   chosenPlanIds = parsed.filter(id => typeof id === 'number' && !Number.isNaN(id))
                 }
-              } catch {}
+              } catch { }
             }
             const planIdNum = parseInt(planId, 10)
             if (!Number.isNaN(planIdNum) && !chosenPlanIds.includes(planIdNum)) {
@@ -171,9 +206,10 @@ export default function PaymentPage() {
         alert('Payment failed. Please try again.')
         setLoading(false)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Payment error:', error)
-      alert('An error occurred. Please try again.')
+      const errorMessage = error?.message || 'An error occurred. Please try again.'
+      alert(`Payment error: ${errorMessage}`)
       setLoading(false)
     }
   }
@@ -193,7 +229,7 @@ export default function PaymentPage() {
   return (
     <div className="min-h-screen bg-white flex items-center  justify-center p-4">
       <div className="max-w-md w-full border-2 border-black rounded-lg p-6 ">
-     <h1
+        <h1
           className="text-2xl sm:text-3xl text-center mb-4 font-bold text-red-600"
           style={{ fontFamily: 'cursive' }}
         >
@@ -237,22 +273,22 @@ export default function PaymentPage() {
         </form>
 
         {/* Ad Section */}
-      <Link
-        href="https://blog.hubspot.com/website/landscaper-websites"  
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className="block"
-      >
-        <div className="relative max-w-3xl  mt-2 mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-34">
-          
-          <Image
-            src="/gamead.webp" 
-            alt="Advertisement"
-            fill
-            className="object-fill "
-          />
-        </div>
-      </Link>
+        <Link
+          href="https://blog.hubspot.com/website/landscaper-websites"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block"
+        >
+          <div className="relative max-w-3xl  mt-2 mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-34">
+
+            <Image
+              src="/gamead.webp"
+              alt="Advertisement"
+              fill
+              className="object-fill "
+            />
+          </div>
+        </Link>
       </div>
     </div>
   )
