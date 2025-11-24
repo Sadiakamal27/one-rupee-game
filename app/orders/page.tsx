@@ -49,8 +49,35 @@ export default function OrdersPage() {
 
     orders.forEach(order => {
       if (!order.plan?.end_date) return
-      const endDate = new Date(order.plan.end_date)
-      const msLeft = endDate.getTime() - now.getTime()
+      const dbEndDate = new Date(order.plan.end_date)
+      const orderDate = new Date(order.created_at)
+      let effectiveEndDate = dbEndDate
+
+      // Logic to distinguish between current cycle orders and past cycle orders
+      if (dbEndDate.getTime() < now.getTime()) {
+        // Case A: Plan is expired in DB (Virtual Mode)
+        // If order was created AFTER the plan expired, it's a "virtual" order -> 15 days from creation
+        if (orderDate.getTime() > dbEndDate.getTime()) {
+          effectiveEndDate = new Date(orderDate.getTime() + 15 * 24 * 60 * 60 * 1000)
+        }
+        // Else: Order was created BEFORE plan expired -> It is truly expired (use dbEndDate)
+      } else {
+        // Case B: Plan is active in DB (Date was likely updated/extended)
+        // Check if this order belongs to the current cycle or a previous one.
+        // Heuristic: If order is older than 25 days relative to the new end date, it's likely from a previous cycle.
+        // (Assuming a standard cycle is ~15 days, 25 days gives a safe buffer)
+        const diffTime = dbEndDate.getTime() - orderDate.getTime()
+        const diffDays = diffTime / (1000 * 60 * 60 * 24)
+
+        if (diffDays > 25) {
+          // Old order from previous cycle -> Treat as expired
+          // We estimate its original expiry was ~15 days after creation
+          effectiveEndDate = new Date(orderDate.getTime() + 15 * 24 * 60 * 60 * 1000)
+        }
+        // Else: Order is recent enough -> Use the new dbEndDate
+      }
+
+      const msLeft = effectiveEndDate.getTime() - now.getTime()
 
       if (msLeft > 0) {
         const days = Math.floor(msLeft / (1000 * 60 * 60 * 24))
@@ -68,7 +95,7 @@ export default function OrdersPage() {
       } else {
         // expired
         newExpiredOrders.add(order.id)
-        newTimeLeft[order.id] = endDate.toLocaleDateString('en-GB', {
+        newTimeLeft[order.id] = effectiveEndDate.toLocaleDateString('en-GB', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
@@ -110,11 +137,11 @@ export default function OrdersPage() {
             ) : (
               orders.map(order => {
                 // Use profile name if available, otherwise fallback to order name
-                const displayName = order.profile?.full_name || 
-                  (order.profile?.first_name && order.profile?.last_name 
+                const displayName = order.profile?.full_name ||
+                  (order.profile?.first_name && order.profile?.last_name
                     ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
                     : order.name);
-                
+
                 return (
                   <div
                     key={order.id}
