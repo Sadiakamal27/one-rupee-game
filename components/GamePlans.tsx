@@ -6,6 +6,36 @@ import { GamePlan, Order, Milestone } from "@/types/database";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "./Navbar";
+import { Calendar, User } from "lucide-react";
+import ProgressBar from "./ProgressBar";
+
+// Image mapping configuration
+const PLAN_IMAGES: Record<string, string> = {
+  'iphone': '/iphone.jpg',
+  'trip': '/trip.jpg',
+  'cash': '/cash.jpg',
+  'money': '/cash.jpg',
+  'bike': '/bike.jpg',
+  'motorcycle': '/bike.jpg',
+  'car': '/car.jpg',
+  'laptop': '/laptop.jpg',
+  'macbook': '/laptop.jpg',
+  'camera': '/camera.jpg',
+  '17 pro max': '/iphone.jpg',
+  'pro max': '/iphone.jpg',
+  'default': '/globe.svg'
+};
+
+const getPlanImage = (title: string) => {
+  const lowerTitle = title.toLowerCase();
+  // Check for keyword inclusion
+  for (const [key, path] of Object.entries(PLAN_IMAGES)) {
+    if (key !== 'default' && lowerTitle.includes(key)) {
+      return path;
+    }
+  }
+  return PLAN_IMAGES['default'];
+};
 
 export default function GamePlans() {
   const [plans, setPlans] = useState<GamePlan[]>([]);
@@ -38,7 +68,7 @@ export default function GamePlans() {
           }
         }
       }
-    } catch {}
+    } catch { }
     return []
   })
   const [hydrated, setHydrated] = useState(false)
@@ -89,13 +119,13 @@ export default function GamePlans() {
           window.localStorage.removeItem("chosenPlanIds");
         }
       }
-    } catch {}
+    } catch { }
   }, [chosenPlanIds]);
 
   // Check for completed orders and add those plan IDs to chosen plans
   useEffect(() => {
     if (!hydrated || !plans.length) return;
-    
+
     const checkCompletedOrders = async () => {
       try {
         const { data: orders } = await supabase
@@ -211,14 +241,14 @@ export default function GamePlans() {
 
   return (
     <div className="min-h-screen bg-white p-4">
-      
+
 
       {/* Game Plans Grid */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 px-1 sm:px-0">
         {plans.map((plan) => {
           // Debug: Log progress data
           console.log(`Plan ${plan.id}: current_amount=${plan.current_amount}, goal_amount=${plan.goal_amount}`);
-          
+
           const progressDataPct = getProgressPercentage(
             plan.current_amount || 0,
             plan.goal_amount || 1
@@ -252,18 +282,20 @@ export default function GamePlans() {
             : (defaultMilestones as Milestone[]);
           // Uniform spacing for milestone markers inside the tube (4 markers)
           const uniformLabels = ["cash", "small camera", "phone", "17 Pro Max"];
-          const uniformPercents = [25, 50, 75, 100].map((p) => Math.min(87, p)); // keep top safely inside
+          const uniformPercents = [20, 45, 70, 95].map((p) => Math.min(87, p)); // keep top safely inside
           const planOrders = recentOrders[plan.id] || [];
           // Use only real progress from database (current_amount / goal_amount)
           const progress = progressDataPct;
           const rupeesProgress = plan.current_amount || 0;
-          
+
           // Debug: Log calculated progress
           console.log(`Plan ${plan.id}: progress=${progress}%, rupeesProgress=${rupeesProgress}`);
           // End date handling (ensure 15 days window visual; if no end_date, derive one)
-          const endDate = plan.end_date
-            ? new Date(plan.end_date)
-            : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+          // End date handling (ensure 15 days window visual; if no end_date or ended, derive one)
+          let endDate = plan.end_date ? new Date(plan.end_date) : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+          if (endDate.getTime() < Date.now()) {
+            endDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+          }
           const now = new Date();
           const msLeft = endDate.getTime() - now.getTime();
           const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
@@ -274,111 +306,71 @@ export default function GamePlans() {
               key={plan.id}
               className="border-2 border-black rounded-lg p-4 bg-white relative"
             >
-              {/* Reward Title */}
-              <h2 className="text-xl font-bold mb-2">{plan.reward_title}</h2>
-
-              {/* End Date */}
-              <p className="text-green-600 mb-4 text-sm">
-                {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}{" "}
-                {ended ? "" : `(~${Math.max(daysLeft, 0)} days left)`}
-              </p>
-
-              <div className="flex gap-4">
-                {/* Left Side - Participants List */}
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold mb-2">
-                    Live Participants:
-                  </h3>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {planOrders.slice(0, 10).map((order) => {
-                      // Use profile name if available, otherwise fallback to order name
-                      const displayName = order.profile?.full_name || 
-                        (order.profile?.first_name && order.profile?.last_name 
-                          ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
-                          : order.name);
-                      
-                      return (
-                        <p key={order.id} className="text-green-600 text-sm">
-                          {displayName} just bought
-                        </p>
-                      );
-                    })}
-                    {planOrders.length === 0 && (
-                      <p className="text-gray-400 text-sm">
-                        No participants yet
-                      </p>
-                    )}
+              {/* Header with Title and Image */}
+              {/* Header with Title/Date on Left and Image on Right */}
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col">
+                  <h2 className="text-2xl font-bold mb-1">{plan.reward_title}</h2>
+                  {/* End Date with Calendar Icon */}
+                  <div className="flex items-center text-gray-500 text-sm">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>
+                      {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}
+                      {!ended && ` (~${Math.max(daysLeft, 0)} days left)`}
+                    </span>
                   </div>
                 </div>
 
-                {/* Right Side - Tube Progress with Milestones */}
-                <div className="w-36 sm:w-40 relative overflow-hidden">
-                  <div className="text-right text-xs mb-1 font-semibold">
-                    Goal: {formatPKR(plan.goal_amount)}
-                  </div>
-                  <div className="relative h-56 sm:h-64">
-                    {/* Tube container with clipped fill */}
-                     <div className="absolute inset-0 mx-auto w-12 sm:w-14 bg-gray-100 border-2 border-gray-300 rounded-full overflow-hidden shadow-inner">
-                     <div
-  className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-full rounded-t-none"
-  style={{
-    height: `${Math.max(progress, 0)}%`,
-    minHeight: progress > 0 ? '2px' : '0px', // Ensure even tiny progress is visible
-    transition: 'height 600ms ease-in-out',
-    backgroundImage: `
-      repeating-linear-gradient(
-        0deg,
-        #f7c948 0%,
-        #f7c948 10%,
-        #e0ac00 10%,
-        #e0ac00 20%
-      )
-    `,
-    backgroundSize: '100% 20px',
-    position: 'absolute',
-    bottom: 0,
-    borderTop: '1px solid rgba(255,255,255,0.6)',
-    boxShadow:
-      'inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(255,200,0,0.4)',
-    animation: 'coinRise 1.8s linear infinite',
-  }}
->
-  {/* subtle rim highlight for curved coins */}
-  <div
-    className="absolute inset-x-0 bottom-0 h-full rounded-b-full rounded-t-none pointer-events-none"
-    style={{
-      background:
-        'radial-gradient(circle at 50% 10%, rgba(255,255,255,0.35), transparent 70%)',
-      mixBlendMode: 'screen',
-      opacity: 0.5,
-    }}
-  ></div>
-</div>
+                <div className="relative w-36 h-26 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                  <Image
+                    src={plan.image_url || getPlanImage(plan.reward_title)}
+                    alt={plan.reward_title}
+                    fill
+                    className="object-contain p-2"
+                  />
+                </div>
+              </div>
 
-                    </div>
-                    {/* Milestone labels outside the tube but inside this box */}
-                    <div className="absolute top-0 bottom-0 left-14 right-0">
-                      {uniformPercents.map((pct, i) => (
-                        <div
-                          key={`label-${plan.id}-${i}`}
-                          className="absolute -translate-y-1/2 flex items-center"
-                          style={{
-                            bottom: `${Math.min(96, Math.max(4, pct))}%`,
-                          }}
-                        >
-                          <div className="w-3 border-t-2 border-gray-400"></div>
-                          <div className="ml-2 text-[10px] text-gray-800 font-semibold truncate max-w-26">
-                            {uniformLabels[i]}
-                          </div>
+              {/* Tube Progress - Centered */}
+              <ProgressBar
+                planId={plan.id}
+                goalAmount={plan.goal_amount}
+                progress={progress}
+                uniformLabels={uniformLabels}
+                uniformPercents={uniformPercents}
+                formatPKR={formatPKR}
+              />
+
+              {/* Live Participants Section - Moved Below */}
+              <div className="mt-4">
+                <h3 className="text-lg font-bold mb-3">
+                  Live Participants
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {planOrders.slice(0, 10).map((order) => {
+                    // Use profile name if available, otherwise fallback to order name
+                    const displayName = order.profile?.full_name ||
+                      (order.profile?.first_name && order.profile?.last_name
+                        ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
+                        : order.name);
+
+                    return (
+                      <div key={order.id} className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-100 shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 shrink-0">
+                          <User className="w-5 h-5 text-gray-500" />
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Current Amount Display at Bottom
-                  <div className="mt-2 text-center text-xs font-semibold text-gray-700 bg-white/80 px-2 py-1 rounded border border-gray-200">
-                    Progress: {formatPKR(rupeesProgress)} of{" "}
-                    {formatPKR(plan.goal_amount)}
-                  </div> */}
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{displayName}</p>
+                          <p className="text-xs text-green-600">just bought</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {planOrders.length === 0 && (
+                    <p className="text-gray-400 text-sm text-center py-4">
+                      No participants yet
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -417,8 +409,8 @@ export default function GamePlans() {
         className="block"
       >
         <div className="relative max-w-7xl mx-auto border-2 border-red-500 rounded-lg overflow-hidden h-64 flex items-center justify-center">
-  <p className="text-red-500 text-xl font-bold">Ad</p>
-</div>
+          <p className="text-red-500 text-xl font-bold">Ad</p>
+        </div>
 
       </Link>
     </div>
