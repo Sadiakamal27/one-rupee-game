@@ -75,6 +75,9 @@ export default function GamePlans() {
   const supabase = createClient();
 
   useEffect(() => {
+    // Check and reset expired plans first
+    checkAndResetPlans();
+
     // Initial data fetch (progress is hydrated from localStorage via state initializers)
     fetchPlans();
     fetchMilestones();
@@ -154,6 +157,21 @@ export default function GamePlans() {
 
   // sign-out now handled in Navbar
 
+  const checkAndResetPlans = async () => {
+    try {
+      const response = await fetch('/api/reset-plans', { method: 'POST' });
+      const result = await response.json();
+      if (result.success && result.resetPlans?.length > 0) {
+        console.log('Plans reset:', result.resetPlans);
+        // Refresh all data after reset
+        fetchPlans();
+        fetchRecentOrders(); // This will clear live participants for reset plans
+      }
+    } catch (error) {
+      console.error('Error checking/resetting plans:', error);
+    }
+  };
+
   const fetchPlans = async () => {
     const { data, error } = await supabase
       .from("game_plans")
@@ -192,17 +210,28 @@ export default function GamePlans() {
       .from("orders")
       .select(`
         *,
-        profile:profiles!user_id(full_name, first_name, last_name)
+        profile:profiles!user_id(full_name, first_name, last_name),
+        plan:game_plans!plan_id(last_reset_date)
       `)
       .eq("payment_status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching orders:", error);
     } else {
+      // Filter orders to only show those from the current cycle
+      // An order belongs to current cycle if its cycle_start_date matches the plan's last_reset_date
+      const currentCycleOrders = (data || []).filter((order: any) => {
+        // Must have both dates to be included
+        if (!order.plan?.last_reset_date || !order.cycle_start_date) {
+          return false; // Exclude orders without proper cycle tracking
+        }
+        // Compare dates (both are ISO strings from Supabase)
+        return order.cycle_start_date === order.plan.last_reset_date;
+      });
+
       const grouped: Record<number, Order[]> = {};
-      data?.forEach((order) => {
+      currentCycleOrders.forEach((order) => {
         if (!grouped[order.plan_id]) {
           grouped[order.plan_id] = [];
         }
@@ -347,7 +376,7 @@ export default function GamePlans() {
                   Live Participants
                 </h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {planOrders.slice(0, 10).map((order) => {
+                  {planOrders.map((order) => {
                     // Use profile name if available, otherwise fallback to order name
                     const displayName = order.profile?.full_name ||
                       (order.profile?.first_name && order.profile?.last_name
@@ -392,7 +421,7 @@ export default function GamePlans() {
                     return [...prev, plan.id];
                   });
                 }}
-                className="mt-4 block w-full bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
+                className="mt-4 block w-full bg-green-600 hover:bg-red-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
               >
                 Enter for {plan.price} Rs
               </Link>

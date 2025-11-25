@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
+import { ShoppingBag, LogOut, Trophy, Shuffle } from 'lucide-react'
 
 export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }) {
   const supabase = createClient()
@@ -72,29 +73,33 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
             <>
               <Link
                 href="/results"
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition flex items-center gap-1.5"
               >
+                <Trophy className="w-4 h-4" />
                 Results
               </Link>
 
               <Link
                 href="/picker"
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition flex items-center gap-1.5"
               >
+                <Shuffle className="w-4 h-4" />
                 Picker
               </Link>
 
               <Link
                 href="/orders"
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition flex items-center gap-1.5"
               >
+                <ShoppingBag className="w-4 h-4" />
                 Orders
               </Link>
 
               <button
                 onClick={handleSignOut}
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition flex items-center gap-1.5"
               >
+                <LogOut className="w-4 h-4" />
                 Logout
               </button>
             </>
