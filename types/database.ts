@@ -6,6 +6,7 @@ export interface GamePlan {
   goal_amount: number
   current_amount: number
   end_date: string
+  image_url?: string
   created_at: string
   updated_at: string
 }
@@ -32,6 +33,7 @@ export interface Milestone {
   plan_id: number
   amount: number
   reward_name: string
+  image_url?: string
   created_at: string
 }
 

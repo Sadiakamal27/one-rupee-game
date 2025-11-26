@@ -283,35 +283,51 @@ export default function GamePlans() {
             plan.goal_amount || 1
           );
           const planMilestones = milestones[plan.id] || [];
+
+          // Deduplicate milestones based on reward_name to handle potential DB duplicates
+          const uniquePlanMilestones = planMilestones.filter((milestone, index, self) =>
+            index === self.findIndex((m) => m.reward_name === milestone.reward_name)
+          );
+
           // If no milestones present for a plan, provide defaults requested by user
           const defaultMilestones = [
             {
               id: `d-${plan.id}-cash`,
               amount: plan.goal_amount * 0.1,
               reward_name: "cash",
+              image_url: "/cash.png",
+              plan_id: plan.id,
+              created_at: new Date().toISOString(),
             },
             {
               id: `d-${plan.id}-camera`,
               amount: plan.goal_amount * 0.3,
               reward_name: "small camera",
+              image_url: "/smallcamera.jpg",
+              plan_id: plan.id,
+              created_at: new Date().toISOString(),
             },
             {
               id: `d-${plan.id}-phone`,
               amount: plan.goal_amount * 0.6,
               reward_name: "phone",
+              image_url: "/phone.png",
+              plan_id: plan.id,
+              created_at: new Date().toISOString(),
             },
             {
               id: `d-${plan.id}-17promax`,
               amount: plan.goal_amount * 1.0,
               reward_name: "17 Pro Max",
+              image_url: "/iphone17.webp",
+              plan_id: plan.id,
+              created_at: new Date().toISOString(),
             },
           ] as unknown as Milestone[];
-          const displayMilestones = planMilestones.length
-            ? planMilestones
+
+          const displayMilestones = uniquePlanMilestones.length
+            ? uniquePlanMilestones
             : (defaultMilestones as Milestone[]);
-          // Uniform spacing for milestone markers inside the tube (4 markers)
-          const uniformLabels = ["cash", "small camera", "phone", "17 Pro Max"];
-          const uniformPercents = [20, 45, 70, 95].map((p) => Math.min(87, p)); // keep top safely inside
           const planOrders = recentOrders[plan.id] || [];
           // Use only real progress from database (current_amount / goal_amount)
           const progress = progressDataPct;
@@ -365,8 +381,7 @@ export default function GamePlans() {
                 planId={plan.id}
                 goalAmount={plan.goal_amount}
                 progress={progress}
-                uniformLabels={uniformLabels}
-                uniformPercents={uniformPercents}
+                milestones={displayMilestones}
                 formatPKR={formatPKR}
               />
 
