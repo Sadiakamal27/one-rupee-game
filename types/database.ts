@@ -34,6 +34,7 @@ export interface Milestone {
   amount: number
   reward_name: string
   image_url?: string
+  price: number
   created_at: string
 }
 

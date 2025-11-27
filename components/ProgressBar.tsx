@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Milestone } from "@/types/database";
+import { Trophy } from "lucide-react";
 
 // Image mapping configuration (fallback when no image_url in Supabase)
 const PLAN_IMAGES: Record<string, string> = {
@@ -36,6 +37,7 @@ interface ProgressBarProps {
     progress: number;
     milestones: Milestone[];
     formatPKR: (amount: number) => string;
+    participantCount: number;
 }
 
 export default function ProgressBar({
@@ -43,24 +45,26 @@ export default function ProgressBar({
     goalAmount,
     progress,
     milestones,
-    formatPKR
+    formatPKR,
+    participantCount
 }: ProgressBarProps) {
     // Sort milestones by amount (ascending) to display from left to right
     const sortedMilestones = [...milestones].sort((a, b) => a.amount - b.amount);
 
     // Use UNIFORM spacing for visual consistency across all plans
     // Dynamically calculate positions based on number of milestones
+    // Stop at 85% to leave room for trophy at the end
     const getUniformPositions = (count: number) => {
         if (count === 0) return [];
         if (count === 1) return [50];
-        if (count === 2) return [30, 80];
-        if (count === 3) return [25, 50, 85];
-        if (count === 4) return [20, 45, 70, 90];
+        if (count === 2) return [25, 65];
+        if (count === 3) return [20, 50, 75];
+        if (count === 4) return [15, 40, 60, 80];
 
-        // For 5+ milestones, distribute evenly between 15% and 90%
+        // For 5+ milestones, distribute evenly between 15% and 80%
         const positions: number[] = [];
         const minPos = 15;
-        const maxPos = 90;
+        const maxPos = 80;
         const spacing = (maxPos - minPos) / (count - 1);
 
         for (let i = 0; i < count; i++) {
@@ -74,23 +78,15 @@ export default function ProgressBar({
 
     return (
         <div className="w-full mb-8 px-2">
-            {/* Premium Goal Badge - Green Theme - Centered Above */}
-            <div className="mb-8 flex justify-center">
-                <div className="relative inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-500 shadow-lg">
-                    {/* Glow effect */}
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-500 blur-md opacity-50"></div>
-
-                    {/* Content */}
-                    <div className="relative flex items-center gap-1.5">
-                        <div className="text-center">
-                            <span className="text-[9px] font-semibold text-green-900 uppercase tracking-wide mr-2">Goal</span>
-                            <span className="text-sm font-bold text-white">{formatPKR(goalAmount)}</span>
-                        </div>
-                    </div>
+            {/* Participant Count Badge - Overlapping Header */}
+            <div className="flex justify-center -mt-12 mb-8 relative z-10">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 shadow-md">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Participants</span>
+                    <span className="text-base font-semibold text-gray-900">{participantCount}</span>
                 </div>
             </div>
 
-            <div className="relative h-24">
+            <div className="relative h-24 pr-16">
                 {/* Horizontal Bar Container */}
                 <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-4 bg-gray-100 border border-gray-300 rounded-full overflow-hidden shadow-inner">
                     <div
@@ -169,10 +165,43 @@ export default function ProgressBar({
                                     <div className="text-[10px] text-gray-800 font-semibold text-center bg-white/80 px-1 rounded leading-tight whitespace-nowrap">
                                         {milestone.reward_name}
                                     </div>
+                                    {milestone.price > 0 && (
+                                        <div className="text-[9px] text-green-600 font-bold text-center bg-white/80 px-1 rounded leading-tight whitespace-nowrap mt-0.5">
+                                            {formatPKR(milestone.price)}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
                     })}
+
+                    {/* Trophy at the end - Final Reward */}
+                    <div
+                        className="absolute h-full flex flex-col items-center justify-center"
+                        style={{
+                            left: '98%',
+                            transform: 'translateX(-50%)'
+                        }}
+                    >
+                        {/* Top: Trophy Icon */}
+                        <div className="absolute bottom-[calc(50%+12px)] flex flex-col items-center mb-1">
+                            <div className={`relative bg-white border-2 ${progress >= 100 ? 'border-yellow-500' : 'border-gray-300'} rounded-lg p-2 shadow-md w-14 h-14 flex items-center justify-center transition-all duration-300`}>
+                                <Trophy className="w-8 h-8 fill-yellow-500 text-yellow-600" strokeWidth={2} />
+                                {/* Connector triangle pointing down */}
+                                <div className={`absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b-2 border-r-2 ${progress >= 100 ? 'border-yellow-500' : 'border-gray-300'} rotate-45`}></div>
+                            </div>
+                        </div>
+
+                        {/* Middle: Dot on the bar */}
+                        <div className={`z-10 w-4 h-4 rounded-full border-2 ${progress >= 100 ? 'bg-yellow-500 border-white' : 'bg-gray-200 border-gray-400'} shadow-sm transition-colors duration-300`}></div>
+
+                        {/* Bottom: Label */}
+                        <div className="absolute top-[calc(50%+12px)] flex flex-col items-center mt-1">
+                            <div className="text-xs text-gray-800 font-bold text-center bg-white/80 px-1 rounded leading-tight whitespace-nowrap">
+                                {formatPKR(goalAmount)}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

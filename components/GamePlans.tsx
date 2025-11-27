@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { GamePlan, Order, Milestone } from "@/types/database";
 import Link from "next/link";
 import Image from "next/image";
-import Navbar from "./Navbar";
+import ConfettiSprinkles from "./ConfettiSprinkles";
 import { Calendar, User } from "lucide-react";
 import ProgressBar from "./ProgressBar";
 
@@ -296,6 +296,7 @@ export default function GamePlans() {
               amount: plan.goal_amount * 0.1,
               reward_name: "cash",
               image_url: "/cash.png",
+              price: 500,
               plan_id: plan.id,
               created_at: new Date().toISOString(),
             },
@@ -304,6 +305,7 @@ export default function GamePlans() {
               amount: plan.goal_amount * 0.3,
               reward_name: "small camera",
               image_url: "/smallcamera.jpg",
+              price: 2000,
               plan_id: plan.id,
               created_at: new Date().toISOString(),
             },
@@ -312,6 +314,7 @@ export default function GamePlans() {
               amount: plan.goal_amount * 0.6,
               reward_name: "phone",
               image_url: "/phone.png",
+              price: 15000,
               plan_id: plan.id,
               created_at: new Date().toISOString(),
             },
@@ -320,6 +323,7 @@ export default function GamePlans() {
               amount: plan.goal_amount * 1.0,
               reward_name: "17 Pro Max",
               image_url: "/iphone17.webp",
+              price: 50000,
               plan_id: plan.id,
               created_at: new Date().toISOString(),
             },
@@ -349,32 +353,46 @@ export default function GamePlans() {
           return (
             <div
               key={plan.id}
-              className="border-2 border-black rounded-lg p-4 bg-white relative"
+              className="border-1 border-black rounded-lg p-6 bg-white relative"
             >
-              {/* Header with Title and Image */}
-              {/* Header with Title/Date on Left and Image on Right */}
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex flex-col">
-                  <h2 className="text-2xl font-bold mb-1">{plan.reward_title}</h2>
-                  {/* End Date with Calendar Icon */}
-                  <div className="flex items-center text-gray-500 text-sm">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    <span>
-                      {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}
-                      {!ended && ` (~${Math.max(daysLeft, 0)} days left)`}
-                    </span>
+
+
+              {/* Header Section - Separated with background */}
+<div className="bg-green-50 -mx-6 -mt-6 mb-8 p-4 border-b border-green-100 rounded-t-lg overflow-hidden">
+
+                {/* Confetti animation */}
+                <ConfettiSprinkles />
+
+                {/* End Date - moved to top right */}
+                <div className="absolute top-2 right-2 flex items-center text-gray-600 text-sm whitespace-nowrap bg-white/70 px-2 py-1 rounded-md shadow">
+                  <Calendar className="w-4 h-4 mr-1 shrink-0" />
+                  <span>
+                    {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}
+                  </span>
+                </div>
+
+                {/* Title on LEFT */}
+                <h2
+                  className="text-3xl font-extrabold mb-4 mt-4 text-left text-gray-800 tracking-wider uppercase"
+                  style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+                >
+                  {plan.reward_title}
+                </h2>
+
+                {/* Plan Image CENTERED */}
+                <div className="w-full flex justify-center mt-2 mb-1">
+                  <div className="relative w-40 h-48 rounded-lg overflow-hidden">
+                    <Image
+                      src={plan.image_url || getPlanImage(plan.reward_title)}
+                      alt={plan.reward_title}
+                      fill
+                      className="object-contain p-2"
+                    />
                   </div>
                 </div>
 
-                <div className="relative w-36 h-26 rounded-lg overflow-hidden shrink-0 bg-gray-100">
-                  <Image
-                    src={plan.image_url || getPlanImage(plan.reward_title)}
-                    alt={plan.reward_title}
-                    fill
-                    className="object-contain p-2"
-                  />
-                </div>
               </div>
+
 
               {/* Tube Progress - Centered */}
               <ProgressBar
@@ -383,7 +401,29 @@ export default function GamePlans() {
                 progress={progress}
                 milestones={displayMilestones}
                 formatPKR={formatPKR}
+                participantCount={planOrders.length}
               />
+
+              {/* Purchase Notification - Shows most recent purchase */}
+              {
+                planOrders.length > 0 && (
+                  <div className="mb-4 animate-fade-in">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <p className="text-sm text-green-800">
+                        <span className="font-semibold">
+                          {planOrders[0].profile?.full_name ||
+                            (planOrders[0].profile?.first_name && planOrders[0].profile?.last_name
+                              ? `${planOrders[0].profile.first_name} ${planOrders[0].profile.last_name}`.trim()
+                              : planOrders[0].name)}
+                        </span>
+                        {' '}just entered this plan!
+                      </p>
+                    </div>
+                  </div>
+                )
+              }
+
 
               {/* Live Participants Section - Moved Below */}
               <div className="mt-4">
@@ -419,11 +459,13 @@ export default function GamePlans() {
               </div>
 
               {/* Winner announcement placeholder after end */}
-              {ended && (
-                <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
-                  Winner will be announced shortly.
-                </div>
-              )}
+              {
+                ended && (
+                  <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
+                    Winner will be announced shortly.
+                  </div>
+                )
+              }
 
               {/* Enter Button */}
               <Link
@@ -457,7 +499,7 @@ export default function GamePlans() {
         </div>
 
       </Link>
-    </div>
+    </div >
   );
 }
 
