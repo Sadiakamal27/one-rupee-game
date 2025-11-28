@@ -53,7 +53,7 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-gray-200">
       <div className="flex justify-between items-center py-4">
         <Link
           href="/"
@@ -126,7 +126,6 @@ export default function Navbar({ variant = 'app' }: { variant?: 'app' | 'auth' }
         </div>
       </div>
 
-      <div className="border-b-2 border-red-200 mb-6"></div>
     </div>
   )
 }

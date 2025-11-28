@@ -76,6 +76,30 @@ export default function ProgressBar({
 
     const uniformPercents = getUniformPositions(sortedMilestones.length);
 
+    // Interpolate visual progress to match uniform milestone positions
+    const getVisualProgress = (currentProgress: number) => {
+        if (goalAmount <= 0) return 0;
+        const points = [{ log: 0, vis: 0 }];
+        sortedMilestones.forEach((m, i) => {
+            points.push({ log: (m.amount / goalAmount) * 100, vis: uniformPercents[i] });
+        });
+        points.push({ log: 100, vis: 100 });
+        points.sort((a, b) => a.log - b.log);
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const start = points[i];
+            const end = points[i + 1];
+            if (currentProgress >= start.log && currentProgress <= end.log) {
+                if (end.log === start.log) return start.vis;
+                const ratio = (currentProgress - start.log) / (end.log - start.log);
+                return start.vis + (ratio * (end.vis - start.vis));
+            }
+        }
+        return currentProgress >= 100 ? 100 : 0;
+    };
+
+    const visualProgress = getVisualProgress(Math.max(progress, 0));
+
     return (
         <div className="w-full mb-8 px-2">
             {/* Participant Count Badge - Overlapping Header */}
@@ -92,7 +116,7 @@ export default function ProgressBar({
                     <div
                         className="absolute top-0 left-0 bottom-0 overflow-hidden rounded-r-full rounded-l-none"
                         style={{
-                            width: `${Math.max(progress, 0)}%`,
+                            width: `${visualProgress}%`,
                             minWidth: progress > 0 ? '2px' : '0px',
                             transition: 'width 600ms ease-in-out',
                             backgroundImage: `
@@ -158,7 +182,15 @@ export default function ProgressBar({
                                 </div>
 
                                 {/* Middle: Dot on the bar */}
-                                <div className={`z-10 w-3 h-3 rounded-full border-2 ${isCompleted ? 'bg-green-500 border-white' : 'bg-gray-200 border-gray-400'} shadow-sm transition-colors duration-300`}></div>
+                                {(() => {
+                                    if (isCompleted) console.log(`Milestone ${milestone.reward_name} completed!`, { progress, req: (milestone.amount / goalAmount) * 100 });
+                                    return (
+                                        <div
+                                            className={`z-10 w-3 h-3 rounded-full border-2 ${isCompleted ? 'border-green-400 shadow-[0_0_8px_rgba(74,222,128,1)]' : 'bg-gray-200 border-gray-400 shadow-sm'} transition-colors duration-300`}
+                                            style={{ backgroundColor: isCompleted ? '#4ade80' : '' }}
+                                        ></div>
+                                    );
+                                })()}
 
                                 {/* Bottom: Text Label */}
                                 <div className="absolute top-[calc(50%+12px)] flex flex-col items-center mt-1">

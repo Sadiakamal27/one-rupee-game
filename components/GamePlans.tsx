@@ -41,6 +41,7 @@ export default function GamePlans() {
   const [plans, setPlans] = useState<GamePlan[]>([]);
   const [recentOrders, setRecentOrders] = useState<Record<number, Order[]>>({});
   const [milestones, setMilestones] = useState<Record<number, Milestone[]>>({});
+  const [loading, setLoading] = useState(true);
   const [chosenPlanIds, setChosenPlanIds] = useState<number[]>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -76,12 +77,25 @@ export default function GamePlans() {
 
   useEffect(() => {
     // Check and reset expired plans first
-    checkAndResetPlans();
-
     // Initial data fetch (progress is hydrated from localStorage via state initializers)
-    fetchPlans();
-    fetchMilestones();
-    fetchRecentOrders();
+    const loadData = async () => {
+      try {
+        // Check and reset expired plans FIRST to avoid showing stale data
+        await checkAndResetPlans();
+
+        await Promise.all([
+          fetchPlans(),
+          fetchMilestones(),
+          fetchRecentOrders()
+        ]);
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
 
     // Set up real-time subscription for orders
     const ordersChannel = supabase
@@ -273,219 +287,226 @@ export default function GamePlans() {
 
 
       {/* Game Plans Grid */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 px-1 sm:px-0">
-        {plans.map((plan) => {
-          // Debug: Log progress data
-          console.log(`Plan ${plan.id}: current_amount=${plan.current_amount}, goal_amount=${plan.goal_amount}`);
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 px-1 sm:px-0">
+          {plans.map((plan) => {
+            // Debug: Log progress data
+            console.log(`Plan ${plan.id}: current_amount=${plan.current_amount}, goal_amount=${plan.goal_amount}`);
 
-          const progressDataPct = getProgressPercentage(
-            plan.current_amount || 0,
-            plan.goal_amount || 1
-          );
-          const planMilestones = milestones[plan.id] || [];
+            const progressDataPct = getProgressPercentage(
+              plan.current_amount || 0,
+              plan.goal_amount || 1
+            );
+            const planMilestones = milestones[plan.id] || [];
 
-          // Deduplicate milestones based on reward_name to handle potential DB duplicates
-          const uniquePlanMilestones = planMilestones.filter((milestone, index, self) =>
-            index === self.findIndex((m) => m.reward_name === milestone.reward_name)
-          );
+            // Deduplicate milestones based on reward_name to handle potential DB duplicates
+            const uniquePlanMilestones = planMilestones.filter((milestone, index, self) =>
+              index === self.findIndex((m) => m.reward_name === milestone.reward_name)
+            );
 
-          // If no milestones present for a plan, provide defaults requested by user
-          const defaultMilestones = [
-            {
-              id: `d-${plan.id}-cash`,
-              amount: plan.goal_amount * 0.1,
-              reward_name: "cash",
-              image_url: "/cash.png",
-              price: 500,
-              plan_id: plan.id,
-              created_at: new Date().toISOString(),
-            },
-            {
-              id: `d-${plan.id}-camera`,
-              amount: plan.goal_amount * 0.3,
-              reward_name: "small camera",
-              image_url: "/smallcamera.jpg",
-              price: 2000,
-              plan_id: plan.id,
-              created_at: new Date().toISOString(),
-            },
-            {
-              id: `d-${plan.id}-phone`,
-              amount: plan.goal_amount * 0.6,
-              reward_name: "phone",
-              image_url: "/phone.png",
-              price: 15000,
-              plan_id: plan.id,
-              created_at: new Date().toISOString(),
-            },
-            {
-              id: `d-${plan.id}-17promax`,
-              amount: plan.goal_amount * 1.0,
-              reward_name: "17 Pro Max",
-              image_url: "/iphone17.webp",
-              price: 50000,
-              plan_id: plan.id,
-              created_at: new Date().toISOString(),
-            },
-          ] as unknown as Milestone[];
-
-          const displayMilestones = uniquePlanMilestones.length
-            ? uniquePlanMilestones
-            : (defaultMilestones as Milestone[]);
-          const planOrders = recentOrders[plan.id] || [];
-          // Use only real progress from database (current_amount / goal_amount)
-          const progress = progressDataPct;
-          const rupeesProgress = plan.current_amount || 0;
-
-          // Debug: Log calculated progress
-          console.log(`Plan ${plan.id}: progress=${progress}%, rupeesProgress=${rupeesProgress}`);
-          // End date handling (ensure 15 days window visual; if no end_date, derive one)
-          // End date handling (ensure 15 days window visual; if no end_date or ended, derive one)
-          let endDate = plan.end_date ? new Date(plan.end_date) : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
-          if (endDate.getTime() < Date.now()) {
-            endDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
-          }
-          const now = new Date();
-          const msLeft = endDate.getTime() - now.getTime();
-          const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
-          const ended = msLeft <= 0;
-
-          return (
-            <div
-              key={plan.id}
-              className="border-1 border-black rounded-lg p-6 bg-white relative"
-            >
-
-
-              {/* Header Section - Separated with background */}
-<div className="bg-green-50 -mx-6 -mt-6 mb-8 p-4 border-b border-green-100 rounded-t-lg overflow-hidden">
-
-                {/* Confetti animation */}
-                <ConfettiSprinkles />
-
-                {/* End Date - moved to top right */}
-                <div className="absolute top-2 right-2 flex items-center text-gray-600 text-sm whitespace-nowrap bg-white/70 px-2 py-1 rounded-md shadow">
-                  <Calendar className="w-4 h-4 mr-1 shrink-0" />
-                  <span>
-                    {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}
-                  </span>
-                </div>
-
-                {/* Title on LEFT */}
-                <h2
-                  className="text-3xl font-extrabold mb-4 mt-4 text-left text-gray-800 tracking-wider uppercase"
-                  style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-                >
-                  {plan.reward_title}
-                </h2>
-
-                {/* Plan Image CENTERED */}
-                <div className="w-full flex justify-center mt-2 mb-1">
-                  <div className="relative w-40 h-48 rounded-lg overflow-hidden">
-                    <Image
-                      src={plan.image_url || getPlanImage(plan.reward_title)}
-                      alt={plan.reward_title}
-                      fill
-                      className="object-contain p-2"
-                    />
-                  </div>
-                </div>
-
-              </div>
-
-
-              {/* Tube Progress - Centered */}
-              <ProgressBar
-                planId={plan.id}
-                goalAmount={plan.goal_amount}
-                progress={progress}
-                milestones={displayMilestones}
-                formatPKR={formatPKR}
-                participantCount={planOrders.length}
-              />
-
-              {/* Purchase Notification - Shows most recent purchase */}
+            // If no milestones present for a plan, provide defaults requested by user
+            const defaultMilestones = [
               {
-                planOrders.length > 0 && (
-                  <div className="mb-4 animate-fade-in">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <p className="text-sm text-green-800">
-                        <span className="font-semibold">
-                          {planOrders[0].profile?.full_name ||
-                            (planOrders[0].profile?.first_name && planOrders[0].profile?.last_name
-                              ? `${planOrders[0].profile.first_name} ${planOrders[0].profile.last_name}`.trim()
-                              : planOrders[0].name)}
-                        </span>
-                        {' '}just entered this plan!
-                      </p>
+                id: `d-${plan.id}-cash`,
+                amount: plan.goal_amount * 0.1,
+                reward_name: "cash",
+                image_url: "/cash.png",
+                price: 500,
+                plan_id: plan.id,
+                created_at: new Date().toISOString(),
+              },
+              {
+                id: `d-${plan.id}-camera`,
+                amount: plan.goal_amount * 0.3,
+                reward_name: "small camera",
+                image_url: "/smallcamera.jpg",
+                price: 2000,
+                plan_id: plan.id,
+                created_at: new Date().toISOString(),
+              },
+              {
+                id: `d-${plan.id}-phone`,
+                amount: plan.goal_amount * 0.6,
+                reward_name: "phone",
+                image_url: "/phone.png",
+                price: 15000,
+                plan_id: plan.id,
+                created_at: new Date().toISOString(),
+              },
+              {
+                id: `d-${plan.id}-17promax`,
+                amount: plan.goal_amount * 1.0,
+                reward_name: "17 Pro Max",
+                image_url: "/iphone17.webp",
+                price: 50000,
+                plan_id: plan.id,
+                created_at: new Date().toISOString(),
+              },
+            ] as unknown as Milestone[];
+
+            const displayMilestones = uniquePlanMilestones.length
+              ? uniquePlanMilestones
+              : (defaultMilestones as Milestone[]);
+            const planOrders = recentOrders[plan.id] || [];
+            // Use only real progress from database (current_amount / goal_amount)
+            const progress = progressDataPct;
+            const rupeesProgress = plan.current_amount || 0;
+
+            // Debug: Log calculated progress
+            console.log(`Plan ${plan.id}: progress=${progress}%, rupeesProgress=${rupeesProgress}`);
+            // End date handling (ensure 15 days window visual; if no end_date, derive one)
+            // End date handling (ensure 15 days window visual; if no end_date or ended, derive one)
+            let endDate = plan.end_date ? new Date(plan.end_date) : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+            if (endDate.getTime() < Date.now()) {
+              endDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+            }
+            const now = new Date();
+            const msLeft = endDate.getTime() - now.getTime();
+            const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+            const ended = msLeft <= 0;
+
+            return (
+              <div
+                key={plan.id}
+                className="border-1 border-black rounded-lg p-6 bg-white relative"
+              >
+
+
+                {/* Header Section - Separated with background */}
+                <div className="bg-green-50 -mx-6 -mt-6 mb-8 p-4 border-b border-green-100 rounded-t-lg overflow-hidden">
+
+                  {/* Confetti animation */}
+                  <ConfettiSprinkles />
+
+                  {/* End Date - moved to top right */}
+                  <div className="absolute top-2 right-2 flex items-center text-gray-600 text-sm whitespace-nowrap bg-white/70 px-2 py-1 rounded-md shadow">
+                    <Calendar className="w-4 h-4 mr-1 shrink-0" />
+                    <span>
+                      {ended ? "Ended" : `Ends: ${formatDate(endDate.toISOString())}`}
+                    </span>
+                  </div>
+
+                  {/* Title on LEFT */}
+                  <h2
+                    className="text-3xl font-extrabold mb-4 mt-4 text-left text-gray-800 tracking-wider uppercase"
+                    style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+                  >
+                    {plan.reward_title}
+                  </h2>
+
+                  {/* Plan Image CENTERED */}
+                  <div className="w-full flex justify-center mt-2 mb-1">
+                    <div className="relative w-40 h-48 rounded-lg overflow-hidden">
+                      <Image
+                        src={plan.image_url || getPlanImage(plan.reward_title)}
+                        alt={plan.reward_title}
+                        fill
+                        className="object-contain p-2"
+                      />
                     </div>
                   </div>
-                )
-              }
 
-
-              {/* Live Participants Section - Moved Below */}
-              <div className="mt-4">
-                <h3 className="text-lg font-bold mb-3">
-                  Live Participants
-                </h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {planOrders.map((order) => {
-                    // Use profile name if available, otherwise fallback to order name
-                    const displayName = order.profile?.full_name ||
-                      (order.profile?.first_name && order.profile?.last_name
-                        ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
-                        : order.name);
-
-                    return (
-                      <div key={order.id} className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-100 shadow-sm">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 shrink-0">
-                          <User className="w-5 h-5 text-gray-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">{displayName}</p>
-                          <p className="text-xs text-green-600">just bought</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {planOrders.length === 0 && (
-                    <p className="text-gray-400 text-sm text-center py-4">
-                      No participants yet
-                    </p>
-                  )}
                 </div>
-              </div>
 
-              {/* Winner announcement placeholder after end */}
-              {
-                ended && (
-                  <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
-                    Winner will be announced shortly.
+
+                {/* Tube Progress - Centered */}
+                <ProgressBar
+                  planId={plan.id}
+                  goalAmount={plan.goal_amount}
+                  progress={progress}
+                  milestones={displayMilestones}
+                  formatPKR={formatPKR}
+                  participantCount={planOrders.length}
+                />
+
+                {/* Purchase Notification - Shows most recent purchase */}
+                {
+                  planOrders.length > 0 && (
+                    <div className="mb-4 animate-fade-in">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <p className="text-sm text-green-800">
+                          <span className="font-semibold">
+                            {planOrders[0].profile?.full_name ||
+                              (planOrders[0].profile?.first_name && planOrders[0].profile?.last_name
+                                ? `${planOrders[0].profile.first_name} ${planOrders[0].profile.last_name}`.trim()
+                                : planOrders[0].name)}
+                          </span>
+                          {' '}just entered this plan!
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
+
+
+                {/* Live Participants Section - Moved Below */}
+                <div className="mt-4">
+                  <h3 className="text-lg font-bold mb-3">
+                    Live Participants
+                  </h3>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {planOrders.map((order) => {
+                      // Use profile name if available, otherwise fallback to order name
+                      const displayName = order.profile?.full_name ||
+                        (order.profile?.first_name && order.profile?.last_name
+                          ? `${order.profile.first_name} ${order.profile.last_name}`.trim()
+                          : order.name);
+
+                      return (
+                        <div key={order.id} className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-100 shadow-sm">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3 shrink-0">
+                            <User className="w-5 h-5 text-gray-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800">{displayName}</p>
+                            <p className="text-xs text-green-600">just bought</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {planOrders.length === 0 && (
+                      <p className="text-gray-400 text-sm text-center py-4">
+                        No participants yet
+                      </p>
+                    )}
                   </div>
-                )
-              }
+                </div>
 
-              {/* Enter Button */}
-              <Link
-                href={`/payment?plan=${plan.id}&amount=${plan.price}`}
-                onClick={() => {
-                  setChosenPlanIds((prev) => {
-                    if (prev.includes(plan.id)) {
-                      return prev; // Already chosen, don't add again
-                    }
-                    return [...prev, plan.id];
-                  });
-                }}
-                className="mt-4 block w-full bg-green-600 hover:bg-red-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
-              >
-                Enter for {plan.price} Rs
-              </Link>
-            </div>
-          );
-        })}
-      </div>
+                {/* Winner announcement placeholder after end */}
+                {
+                  ended && (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
+                      Winner will be announced shortly.
+                    </div>
+                  )
+                }
+
+                {/* Enter Button */}
+                <Link
+                  href={`/payment?plan=${plan.id}&amount=${plan.price}`}
+                  onClick={() => {
+                    setChosenPlanIds((prev) => {
+                      if (prev.includes(plan.id)) {
+                        return prev; // Already chosen, don't add again
+                      }
+                      return [...prev, plan.id];
+                    });
+                  }}
+                  className="mt-4 block w-full bg-green-600 hover:bg-red-600 text-white text-center py-2 rounded-lg font-semibold transition-colors"
+                >
+                  Enter for {plan.price} Rs
+                </Link>
+              </div>
+            );
+
+          })}
+        </div>
+      )}
 
       {/* Ad Section */}
       <Link

@@ -47,35 +47,50 @@ export default function OrdersPage() {
     const newTimeLeft: Record<number, string> = {}
     const newExpiredOrders = new Set<number>()
 
+    // Group orders by plan_id to ensure all orders for the same active plan use the same end date
+    const planEndDates: Record<number, Date> = {}
+    
+    // First pass: Calculate effective end dates per plan (not per order)
     orders.forEach(order => {
-      if (!order.plan?.end_date) return
+      if (!order.plan?.end_date || !order.plan.id) return
+      
+      // If we already calculated this plan's end date, skip
+      if (planEndDates[order.plan.id]) return
+      
       const dbEndDate = new Date(order.plan.end_date)
-      const orderDate = new Date(order.created_at)
       let effectiveEndDate = dbEndDate
 
-      // Logic to distinguish between current cycle orders and past cycle orders
-      if (dbEndDate.getTime() < now.getTime()) {
-        // Case A: Plan is expired in DB (Virtual Mode)
-        // If order was created AFTER the plan expired, it's a "virtual" order -> 15 days from creation
-        if (orderDate.getTime() > dbEndDate.getTime()) {
-          effectiveEndDate = new Date(orderDate.getTime() + 15 * 24 * 60 * 60 * 1000)
-        }
-        // Else: Order was created BEFORE plan expired -> It is truly expired (use dbEndDate)
+      // If plan is currently active (end_date is in the future), use the plan's end_date for all orders
+      if (dbEndDate.getTime() >= now.getTime()) {
+        // Plan is active - use the plan's end_date for all orders of this plan
+        effectiveEndDate = dbEndDate
       } else {
-        // Case B: Plan is active in DB (Date was likely updated/extended)
-        // Check if this order belongs to the current cycle or a previous one.
-        // Heuristic: If order is older than 25 days relative to the new end date, it's likely from a previous cycle.
-        // (Assuming a standard cycle is ~15 days, 25 days gives a safe buffer)
-        const diffTime = dbEndDate.getTime() - orderDate.getTime()
-        const diffDays = diffTime / (1000 * 60 * 60 * 24)
+        // Plan is expired - use virtual mode logic only for orders created after plan expired
+        // For active plans, we'll handle this in the second pass
+        effectiveEndDate = dbEndDate
+      }
+      
+      planEndDates[order.plan.id] = effectiveEndDate
+    })
 
-        if (diffDays > 25) {
-          // Old order from previous cycle -> Treat as expired
-          // We estimate its original expiry was ~15 days after creation
+    // Second pass: Calculate timers for each order using the plan's effective end date
+    orders.forEach(order => {
+      if (!order.plan?.end_date || !order.plan.id) return
+      
+      const orderDate = new Date(order.created_at)
+      const planEffectiveEndDate = planEndDates[order.plan.id]
+      let effectiveEndDate = planEffectiveEndDate
+
+      // Only apply virtual mode logic if plan is expired
+      if (planEffectiveEndDate.getTime() < now.getTime()) {
+        // Plan is expired - check if this is a virtual order (created after plan expired)
+        if (orderDate.getTime() > planEffectiveEndDate.getTime()) {
+          // Virtual order - 15 days from creation
           effectiveEndDate = new Date(orderDate.getTime() + 15 * 24 * 60 * 60 * 1000)
         }
-        // Else: Order is recent enough -> Use the new dbEndDate
+        // Else: Order was created before plan expired -> use plan's expired date
       }
+      // If plan is active, all orders use the same plan end_date (already set above)
 
       const msLeft = effectiveEndDate.getTime() - now.getTime()
 
